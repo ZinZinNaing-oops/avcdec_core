@@ -5,9 +5,7 @@
 #include <cstdio>
 #include <mutex>
 
-//============================================================================
 // JM External Functions and Variables
-//============================================================================
 extern "C" {
     #include "../../JM/ldecod/inc/global.h"
     #include "../../JM/ldecod/inc/annexb.h"
@@ -55,7 +53,6 @@ Avcdec::Avcdec(DECPARAM_AVC *INPUT_PARAM)
     m_streamBuffer = new Byte[m_streamCapacity];
     memset(m_streamBuffer, 0, m_streamCapacity);
     m_streamSize = 0;  
-    std::cout << "  Buffer: " << m_streamCapacity / (1024*1024) << " MB" << std::endl;
 
     // ALLOCATE PICTURE BUFFERS 
     std::cout << "Display Picture Buffers" << std::endl;
@@ -81,15 +78,12 @@ Avcdec::Avcdec(DECPARAM_AVC *INPUT_PARAM)
 }
 
 Avcdec::~Avcdec()
-{
-    std::cout << "Freeing buffers:" << std::endl;
-    
+{  
     // Free stream buffer
     if (m_streamBuffer)
     {
         delete[] m_streamBuffer;
         m_streamBuffer = nullptr;
-        std::cout << "  - Stream buffer freed" << std::endl;
     }
     
     // Free picture buffers ONLY if allocated
@@ -105,21 +99,15 @@ Avcdec::~Avcdec()
         }
         delete[] m_pictureBuffers;
         m_pictureBuffers = nullptr;
-        
-        std::cout << "  - Picture buffers freed" << std::endl;
     }
     
     // Clear queue
     while (!m_frameQueue.empty())
         m_frameQueue.pop();
-    
-    std::cout << "Cleanup complete" << std::endl;
 }
 
 void Avcdec::vdec_start(UInt16 PLAY_MODE, UInt16 POST_PROCESS)
-{
-    std::cout << "vdec_start()" << std::endl;
-    
+{  
     if(m_started)
         return;
 
@@ -135,8 +123,6 @@ void Avcdec::vdec_start(UInt16 PLAY_MODE, UInt16 POST_PROCESS)
 
 int Avcdec::vdec_stop()
 {
-    std::cout << "vdec_stop()" << std::endl;
-    
     m_started = false;
     
     return 0;
@@ -144,7 +130,6 @@ int Avcdec::vdec_stop()
 
 void Avcdec::vdec_postprocess(UInt16 TYPE)
 {
-    std::cout << "vdec_postprocess()" << std::endl;
     m_postprocess_enabled = (TYPE != 0);
 }
 
@@ -256,15 +241,12 @@ void Avcdec::vdec_release_pic_buffer(Byte* PIC_ADDR)
     if (!PIC_ADDR)
         return;
     
-    //std::cout << "  vdec_release_pic_buffer(): Releasing buffer " << (void*)PIC_ADDR << std::endl;
-    
     // Mark buffer as available
     for (int i = 0; i < m_bufferCount; i++)
     {
         if (m_pictureBuffers[i].data == PIC_ADDR)
         {
             m_pictureBuffers[i].locked = false;
-            //std::cout << "    ✓ Buffer " << i << " marked as available" << std::endl;
             return;
         }
     }
@@ -316,10 +298,6 @@ int Avcdec::vdec_YUV420toRGB24(
     return width * height * 3;
 }
 
-//============================================================================
-// 5.2.12 vdec_YUV420toRGB24_2() - Fast YUV420 to RGB24
-//============================================================================
-
 void Avcdec::vdec_YUV420toRGB24_2(
     unsigned char* y,
     unsigned char* u,
@@ -355,10 +333,6 @@ void Avcdec::vdec_YUV420toRGB24_2(
     }
 }
 
-//============================================================================
-// 5.2.13 YUV420toRGB24_DX() - YUV420 to BGR24 for DirectDraw
-//============================================================================
-
 int Avcdec::YUV420toRGB24_DX(
     int Mode,
     unsigned char* iBGR,
@@ -369,14 +343,8 @@ int Avcdec::YUV420toRGB24_DX(
     return vdec_YUV420toRGB24(Mode, iBGR, iYUV, width, height);
 }
 
-//============================================================================
-// Private Methods
-//============================================================================
-
 void Avcdec::InitJMDecoder()
-{
-    std::cout << "  InitJMDecoder()" << std::endl;
-    
+{   
     // Create JM input parameters
     InputParameters inputParams = {};
     
@@ -424,9 +392,8 @@ void Avcdec::DecodeBuffer()
         if (ret == DEC_EOS || ret == DEC_SUCCEED)
         {
             frame_count++;
-            std::cout << "\n  ===== Frame " << frame_count << " Decoded =====" << std::endl;
+            std::cout << "\n Numbers of  Frame  Decoded" << frame_count  << std::endl;
             
-            // Traverse the decoded picture linked list and process all valid pictures
             if (pDecPicList != nullptr)
             {
                 for (DecodedPicList *pPic = pDecPicList; pPic != nullptr; pPic = pPic->pNext)
@@ -458,7 +425,7 @@ void Avcdec::DecodeBuffer()
     } while (ret == DEC_SUCCEED);
     
     // Flush the DPB: FinitDecoder outputs all remaining buffered pictures
-    std::cout << "  ========== END OF STREAM - Flushing DPB ==========" << std::endl;
+    std::cout << " END OF STREAM - Flushing DPB " << std::endl;
     FinitDecoder(&pDecPicList);
     
     // Process all remaining valid pictures from the flushed DPB
@@ -483,8 +450,7 @@ void Avcdec::DecodeBuffer()
             }
         }
     }
-    
-    std::cout << "\n  ========== DECODE COMPLETE ==========" << std::endl;
+  
     std::cout << "  Total frames decoded: " << frame_count << std::endl;
     std::cout << "  Total pictures retrieved: " << picture_count << std::endl;
 }
@@ -496,8 +462,6 @@ void Avcdec::ProcessDecodedPicture(DecodedPicList *pPic)
         std::cout << "      ERROR: Invalid picture pointer" << std::endl;
         return;
     }
-    
-    std::cout << "    ========== PROCESSING PICTURE ==========" << std::endl;
     
     int width = pPic->iWidth;
     int height = pPic->iHeight;
@@ -511,7 +475,7 @@ void Avcdec::ProcessDecodedPicture(DecodedPicList *pPic)
     std::cout << "      V plane: " << uvSize << " bytes" << std::endl;
     std::cout << "      Total: " << totalSize << " bytes" << std::endl;
     
-    // ========== GET AVAILABLE DISPLAY BUFFER ==========
+    // GET AVAILABLE DISPLAY BUFFER 
     PictureBuffer* buffer = GetAvailableBuffer();
     if (!buffer)
     {
@@ -521,7 +485,7 @@ void Avcdec::ProcessDecodedPicture(DecodedPicList *pPic)
     
     std::cout << "      Using display buffer" << std::endl;
     
-    // ========== COPY YUV DATA TO DISPLAY BUFFER ==========
+    // COPY YUV DATA TO DISPLAY BUFFER
     if (pPic->pY)
     {
         std::cout << "      Copying Y plane..." << std::endl;
@@ -550,7 +514,7 @@ void Avcdec::ProcessDecodedPicture(DecodedPicList *pPic)
         memset(buffer->data + ySize + uvSize, 128, uvSize);
     }
     
-    // ========== UPDATE BUFFER METADATA ==========
+    // UPDATE BUFFER METADATA 
     buffer->width = width;
     buffer->height = height;
     buffer->poc = pPic->iPOC;
@@ -559,10 +523,10 @@ void Avcdec::ProcessDecodedPicture(DecodedPicList *pPic)
     std::cout << "      ✓ Picture data copied to display buffer successfully" << std::endl;
     std::cout << "      Buffer address: " << (void*)buffer->data << std::endl;
     
-    // ========== QUEUE FRAME FOR APPLICATION ==========
+    // QUEUE FRAME FOR APPLICATION
     QueueFrameForDisplay(buffer);
     
-    std::cout << "    ========== END PROCESSING ==========" << std::endl;
+    std::cout << "END PROCESSING" << std::endl;
 }
 
 bool Avcdec::CheckBufferSpace(UInt32 needed_bytes)
@@ -614,8 +578,6 @@ void Avcdec::QueueFrameForDisplay(PictureBuffer* buffer)
     if (!buffer)
         return;
     
-    std::cout << "      Queueing frame for application..." << std::endl;
-    
     QueuedFrame frame;
     frame.data = buffer->data;
     frame.width = buffer->width;
@@ -631,5 +593,5 @@ void Avcdec::QueueFrameForDisplay(PictureBuffer* buffer)
         m_frameQueue.push(frame);
     }
     
-    std::cout << "      ✓ Frame queued! Queue size: " << m_frameQueue.size() << std::endl;
+    std::cout << " Frame queued! Queue size: " << m_frameQueue.size() << std::endl;
 }
