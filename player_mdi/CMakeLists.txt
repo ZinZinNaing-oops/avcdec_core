@@ -3,6 +3,7 @@ set(PLAYER_MDI_SOURCES
     src/main.cpp
     src/mainwindow.cpp
     src/imageviewer.cpp
+    src/videoplayer.cpp 
     src/decoder_thread.cpp
 )
 
@@ -10,6 +11,7 @@ set(PLAYER_MDI_SOURCES
 set(PLAYER_MDI_HEADERS
     include/mainwindow.h
     include/imageviewer.h
+    include/videoplayer.h 
     include/decoder_thread.h
 )
 
@@ -24,11 +26,13 @@ if(Qt6_FOUND)
     target_link_libraries(player_mdi
         PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets
         PRIVATE avcdec
+        PRIVATE jmdec
     )
 else()
     target_link_libraries(player_mdi
         PRIVATE Qt5::Core Qt5::Gui Qt5::Widgets
         PRIVATE avcdec
+        PRIVATE jmdec
     )
 endif()
 

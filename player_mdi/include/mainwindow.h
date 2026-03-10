@@ -2,12 +2,11 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QMdiArea>
-#include <QMdiSubWindow>
 #include <QLabel>
 #include <QProgressBar>
-#include <QCloseEvent>
-#include <memory>
+#include <QMdiArea>
+
+class VideoPlayer;
 
 class MainWindow : public QMainWindow
 {
@@ -21,39 +20,27 @@ protected:
     void closeEvent(QCloseEvent *event) override;
 
 private slots:
-    // File menu actions
     void openFile();
     void closeCurrentWindow();
-    void closeAllWindows();
-    void exit();
-
-    // Window menu actions
     void cascade();
     void tile();
     void updateWindowMenu();
-
-    // Decoder status updates
     void onDecoderStatusChanged(const QString &message);
     void onDecodingProgress(int current, int total);
 
 private:
-    // UI creation methods
+    void createCentralWidget();
     void createMenuBar();
     void createToolBar();
     void createStatusBar();
-    void createCentralWidget();
+    void closeAllWindows();
+    void exit();
 
-    // Helper methods
-    QMdiSubWindow* createChildWindow();
-
-    // UI Components
     QMdiArea *mdiArea;
+    QMenu *windowMenu;
     QLabel *statusLabel;
     QProgressBar *progressBar;
     QLabel *decoderStatusLabel;
-
-    // Window menu
-    QMenu *windowMenu;
 };
 
 #endif // MAINWINDOW_H

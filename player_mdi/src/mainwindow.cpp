@@ -1,6 +1,7 @@
 #include "../include/mainwindow.h"
-#include "../include/imageviewer.h"
+#include "../include/videoplayer.h"
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QMenuBar>
 #include <QToolBar>
 #include <QStatusBar>
@@ -9,25 +10,32 @@
 #include <QMessageBox>
 #include <QMdiSubWindow>
 #include <QFileInfo>
+#include <QCloseEvent>
+#include <QDebug>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), windowMenu(nullptr)
 {
-    // Create central MDI area
     createCentralWidget();
-
-    // Create UI components
     createMenuBar();
     createToolBar();
     createStatusBar();
 
-    // Connect signals
     connect(mdiArea, &QMdiArea::subWindowActivated,
             this, &MainWindow::updateWindowMenu);
+
+    setWindowTitle(tr("H.264 Video Player"));
+    resize(1024, 768);
 }
 
 MainWindow::~MainWindow()
 {
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    closeAllWindows();
+    event->accept();
 }
 
 void MainWindow::createCentralWidget()
@@ -39,7 +47,6 @@ void MainWindow::createCentralWidget()
 
 void MainWindow::createMenuBar()
 {
-    // File Menu
     QMenu *fileMenu = menuBar()->addMenu(tr("&File"));
 
     QAction *openAction = fileMenu->addAction(tr("&Open H.264 File..."));
@@ -58,11 +65,9 @@ void MainWindow::createMenuBar()
     exitAction->setShortcut(QKeySequence::Quit);
     connect(exitAction, &QAction::triggered, this, &MainWindow::exit);
 
-    // Window Menu
     windowMenu = menuBar()->addMenu(tr("&Window"));
     connect(windowMenu, &QMenu::aboutToShow, this, &MainWindow::updateWindowMenu);
 
-    // View Menu
     QMenu *viewMenu = menuBar()->addMenu(tr("&View"));
 
     QAction *cascadeAction = viewMenu->addAction(tr("&Cascade"));
@@ -71,7 +76,6 @@ void MainWindow::createMenuBar()
     QAction *tileAction = viewMenu->addAction(tr("&Tile"));
     connect(tileAction, &QAction::triggered, this, &MainWindow::tile);
 
-    // Help Menu
     QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
     QAction *aboutAction = helpMenu->addAction(tr("&About"));
     connect(aboutAction, &QAction::triggered, this, [this]() {
@@ -102,65 +106,51 @@ void MainWindow::createToolBar()
 void MainWindow::createStatusBar()
 {
     statusLabel = new QLabel(tr("Ready"));
-    statusBar()->addWidget(statusLabel);
+    statusBar()->addWidget(statusLabel, 1);
 
     progressBar = new QProgressBar;
-    progressBar->setMaximumWidth(150);
+    progressBar->setMaximumWidth(200);
     progressBar->setVisible(false);
-    statusBar()->addPermanentWidget(progressBar);
+    statusBar()->addWidget(progressBar);
 
-    decoderStatusLabel = new QLabel(tr("Idle"));
-    decoderStatusLabel->setMinimumWidth(200);
-    statusBar()->addPermanentWidget(decoderStatusLabel);
+    decoderStatusLabel = new QLabel(tr("No file loaded"));
+    statusBar()->addPermanentWidget(decoderStatusLabel, 1);
 }
 
 void MainWindow::openFile()
 {
     QString fileName = QFileDialog::getOpenFileName(this,
-        tr("Open H.264 File"), QString(),
-        tr("H.264 Files (*.264 *.h264);;All Files (*)"));
-
+        tr("Open H.264 Video"), "",
+        tr("H.264 Files (*.h264 *.264 *.avc);;All Files (*)"));
+    
     if (!fileName.isEmpty()) {
-        QMdiSubWindow *child = createChildWindow();
-        ImageViewer *viewer = qobject_cast<ImageViewer*>(child->widget());
-
-        if (viewer) {
-            connect(viewer, &ImageViewer::statusChanged,
-                    this, &MainWindow::onDecoderStatusChanged);
-            connect(viewer, &ImageViewer::decodingProgress,
-                    this, &MainWindow::onDecodingProgress);
-
-            if (viewer->openFile(fileName)) {
-                child->setWindowTitle(QFileInfo(fileName).fileName());
-                statusLabel->setText(tr("Opened: %1").arg(QFileInfo(fileName).fileName()));
-            } else {
-                QMessageBox::warning(this, tr("Error"),
-                    tr("Failed to open file: %1").arg(fileName));
-                child->close();
-            }
-        }
+        VideoPlayer *videoPlayer = new VideoPlayer();
+        QMdiSubWindow *subWindow = mdiArea->addSubWindow(videoPlayer);
+        
+        connect(videoPlayer, &VideoPlayer::statusChanged,
+                this, &MainWindow::onDecoderStatusChanged);
+        
+        QString baseName = QFileInfo(fileName).fileName();
+        subWindow->setWindowTitle(tr("Video - %1").arg(baseName));
+        subWindow->setAttribute(Qt::WA_DeleteOnClose);
+        subWindow->resize(640, 480);
+        
+        videoPlayer->openFile(fileName);
+        videoPlayer->show();
     }
-}
-
-QMdiSubWindow* MainWindow::createChildWindow()
-{
-    ImageViewer *viewer = new ImageViewer;
-    QMdiSubWindow *subWindow = mdiArea->addSubWindow(viewer);
-    subWindow->setAttribute(Qt::WA_DeleteOnClose);
-    viewer->show();
-    return subWindow;
 }
 
 void MainWindow::closeCurrentWindow()
 {
-    if (QMdiSubWindow *activeWindow = mdiArea->activeSubWindow()) {
-        activeWindow->close();
-    }
+    if (mdiArea->currentSubWindow())
+        mdiArea->currentSubWindow()->close();
 }
 
 void MainWindow::closeAllWindows()
 {
-    mdiArea->closeAllSubWindows();
+    QList<QMdiSubWindow*> windows = mdiArea->subWindowList();
+    for (QMdiSubWindow *window : windows)
+        window->close();
 }
 
 void MainWindow::exit()
@@ -181,48 +171,40 @@ void MainWindow::tile()
 void MainWindow::updateWindowMenu()
 {
     windowMenu->clear();
-
-    QAction *cascadeAction = windowMenu->addAction(tr("&Cascade"));
-    connect(cascadeAction, &QAction::triggered, this, &MainWindow::cascade);
-
-    QAction *tileAction = windowMenu->addAction(tr("&Tile"));
-    connect(tileAction, &QAction::triggered, this, &MainWindow::tile);
-
-    windowMenu->addSeparator();
-
-    QList<QMdiSubWindow *> windows = mdiArea->subWindowList();
-    int numWindows = windows.count();
-
-    for (int i = 0; i < numWindows; ++i) {
-        QMdiSubWindow *subWindow = windows.at(i);
-        QString text = tr("&%1 %2").arg(i + 1).arg(subWindow->windowTitle());
+    
+    QList<QMdiSubWindow*> windows = mdiArea->subWindowList();
+    
+    if (windows.count() == 0) {
+        windowMenu->addAction(tr("No windows"));
+        return;
+    }
+    
+    for (int i = 0; i < windows.count(); ++i) {
+        QMdiSubWindow *mdiSubWindow = windows.at(i);
+        QString text = tr("&%1 %2").arg(i + 1).arg(mdiSubWindow->windowTitle());
+        
         QAction *action = windowMenu->addAction(text);
         action->setCheckable(true);
-        action->setChecked(subWindow == mdiArea->activeSubWindow());
-        connect(action, &QAction::triggered, [subWindow]() {
-            subWindow->setFocus();
+        action->setChecked(mdiArea->activeSubWindow() == mdiSubWindow);
+        
+        connect(action, &QAction::triggered, mdiSubWindow, [mdiSubWindow]() {
+            mdiSubWindow->showNormal();
+            mdiSubWindow->setFocus();
         });
     }
 }
 
 void MainWindow::onDecoderStatusChanged(const QString &message)
 {
-    decoderStatusLabel->setText(message);
+    statusLabel->setText(message);
 }
 
 void MainWindow::onDecodingProgress(int current, int total)
 {
     if (total > 0) {
-        progressBar->setMaximum(total);
-        progressBar->setValue(current);
         progressBar->setVisible(true);
+        progressBar->setValue((current * 100) / total);
     } else {
         progressBar->setVisible(false);
     }
-}
-
-void MainWindow::closeEvent(QCloseEvent *event)
-{
-    closeAllWindows();
-    event->accept();
 }

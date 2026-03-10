@@ -1,13 +1,9 @@
 #include "../include/decoder_thread.h"
-#include "AvcDecoder.h"
-#include <QFile>
-#include <QFileInfo>
 #include <QCoreApplication>
 #include <QDebug>
 #include <fstream>
 #include <vector>
 #include <cstring>
-#include <algorithm>
 
 DecoderThread::DecoderThread(QObject *parent)
     : QObject(parent), shouldStop(false)
@@ -45,16 +41,13 @@ void DecoderThread::startDecoding()
         DECPARAM_AVC param = {};
         param.bs_buf_size = 11718750;
         param.disp_buf_num = 16;
-        param.disp_format = 0;             // YUV420
+        param.disp_format = 0;
         param.disp_max_width = 1920;
         param.disp_max_height = 1080;
-        param.target_profile = 100;        // High Profile
-        param.target_level = 42;           // Level 4.2
+        param.target_profile = 100;
+        param.target_level = 42;
 
-        // Create decoder
         decoder = std::make_unique<Avcdec>(&param);
-
-        // Start decoder
         decoder->vdec_start(0, 0);
 
         std::ifstream file(inputFile.toStdString(), std::ios::binary);
@@ -64,30 +57,27 @@ void DecoderThread::startDecoding()
             return;
         }
 
-        // Get file size
         file.seekg(0, std::ios::end);
         std::streamsize fileSize = file.tellg();
         file.seekg(0, std::ios::beg);
 
-        // Feed data to decoder
         std::vector<unsigned char> chunk(65536);
         shouldStop = false;
 
+        qDebug() << "DecoderThread: Starting to feed data";
+
+        // FEED PHASE
         while (file && !shouldStop) {
             file.read((char*)chunk.data(), chunk.size());
             std::streamsize bytesRead = file.gcount();
 
-            if (bytesRead <= 0)
-                break;
+            if (bytesRead <= 0) break;
 
-            // Feed to decoder
             unsigned int ret = decoder->vdec_put_bs(
                 chunk.data(),
                 bytesRead,
-                file.eof() ? 1 : 0,  // END_OF_AU when EOF
-                0,                    // PTS
-                0,                    // ERR_FLAG
-                0                     // ERR_SN_SKIP
+                file.eof() ? 1 : 0,
+                0, 0, 0
             );
 
             if (ret == (unsigned int)-1) {
@@ -98,28 +88,38 @@ void DecoderThread::startDecoding()
 
         file.close();
 
-        // Get decoded pictures
+        // RETRIEVAL PHASE
         int picCount = 0;
+
+        qDebug() << "DecoderThread: Retrieving decoded frames";
 
         while (!shouldStop) {
             PICMETAINFO_AVC picInfo = {};
             unsigned char* yuv = decoder->vdec_get_picture(&picInfo);
 
-            if (!yuv)
-                break;
+            if (!yuv) break;
 
             picCount++;
 
+            // ✅ CRITICAL: Convert to independent pixmap
             QPixmap pixmap = yuv420ToQPixmap(yuv, picInfo.pic_width, picInfo.pic_height);
 
-            emit frameDecoded(pixmap, picCount, 0);
+            // ✅ Ensure deep copy
+            pixmap = pixmap.copy();
 
-            // Release picture buffer
+            // ✅ EMIT BEFORE RELEASE
+            emit frameDecoded(pixmap, picCount, picCount);
+
+            // ✅ RELEASE IMMEDIATELY AFTER CONVERSION
             decoder->vdec_release_pic_buffer(yuv);
+
+            qDebug() << "Frame" << picCount << "- converted and released";
+
             QCoreApplication::processEvents();
         }
 
-        // Stop decoder
+        qDebug() << "DecoderThread: Total frames decoded:" << picCount;
+
         decoder->vdec_stop();
         decoder.reset();
 
@@ -130,35 +130,16 @@ void DecoderThread::startDecoding()
     emit decodingFinished();
 }
 
-/**
- * @brief Converts YUV420 planar data to RGB QPixmap using decoder's built-in function
- * 
- * Parameters:
- *   yuvData  - Pointer to YUV420 planar buffer (Y plane followed by U and V planes)
- *   width    - Frame width in pixels
- *   height   - Frame height in pixels
- * 
- * Returns: QPixmap containing the RGB image, or null pixmap on error
- */
 QPixmap DecoderThread::yuv420ToQPixmap(const unsigned char *yuvData, int width, int height)
 {
     if (!yuvData || width <= 0 || height <= 0) {
-        qWarning() << "Invalid YUV data or dimensions:" << width << "x" << height;
         return QPixmap();
     }
 
     try {
-        // Allocate RGB buffer (3 bytes per pixel)
-        int rgbSize = width * height * 3;
-        std::vector<unsigned char> rgbData(rgbSize);
+        // ✅ OWN MEMORY for RGB (not decoder's)
+        std::vector<unsigned char> rgbData(width * height * 3);
 
-        // Call decoder's built-in YUV420 to RGB24 conversion
-        // Parameters:
-        //   Mode=0: Standard conversion
-        //   rgbData: Output RGB buffer
-        //   yuvData: Input YUV420 buffer
-        //   width: Frame width
-        //   height: Frame height
         int ret = decoder->vdec_YUV420toRGB24(
             0,
             rgbData.data(),
@@ -168,30 +149,27 @@ QPixmap DecoderThread::yuv420ToQPixmap(const unsigned char *yuvData, int width, 
         );
 
         if (ret <= 0) {
-            qWarning() << "vdec_YUV420toRGB24 failed with return code:" << ret;
+            qWarning() << "Conversion failed";
             return QPixmap();
         }
 
-        // Create QImage from RGB data
+        // ✅ Create image from OUR buffer
         QImage image(rgbData.data(), width, height, width * 3, QImage::Format_RGB888);
 
         if (image.isNull()) {
-            qWarning() << "Failed to create QImage from RGB data";
             return QPixmap();
         }
 
-        // Convert to QPixmap (copy data to ensure ownership)
-        QPixmap pixmap = QPixmap::fromImage(image.copy());
+        // ✅ COPY to ensure independence
+        QImage imageCopy = image.copy();
 
-        if (pixmap.isNull()) {
-            qWarning() << "Failed to convert QImage to QPixmap";
-            return QPixmap();
-        }
+        // ✅ Create QPixmap (owns its data now)
+        QPixmap pixmap = QPixmap::fromImage(imageCopy);
 
         return pixmap;
 
     } catch (const std::exception &e) {
-        qWarning() << "Exception in yuv420ToQPixmap:" << e.what();
+        qWarning() << "Exception:" << e.what();
         return QPixmap();
     }
 }

@@ -190,15 +190,11 @@ Byte* Avcdec::vdec_get_picture(PICMETAINFO_AVC* PIC_METAINFO)
         
         if (m_frameQueue.empty())
         {
-            std::cout << "  vdec_get_picture(): No frames available" << std::endl;
             return NULL;
         }
         
         QueuedFrame frame = m_frameQueue.front();
         m_frameQueue.pop();
-        
-        std::cout << "  vdec_get_picture(): Retrieved frame " << m_frameCount 
-                  << " (" << frame.width << "x" << frame.height << ")" << std::endl;
         
         if (PIC_METAINFO)
         {
@@ -469,12 +465,6 @@ void Avcdec::ProcessDecodedPicture(DecodedPicList *pPic)
     int uvSize = ySize / 4;
     int totalSize = ySize + 2 * uvSize;
     
-    std::cout << "      Picture size: " << width << "x" << height << std::endl;
-    std::cout << "      Y plane: " << ySize << " bytes" << std::endl;
-    std::cout << "      U plane: " << uvSize << " bytes" << std::endl;
-    std::cout << "      V plane: " << uvSize << " bytes" << std::endl;
-    std::cout << "      Total: " << totalSize << " bytes" << std::endl;
-    
     // GET AVAILABLE DISPLAY BUFFER 
     PictureBuffer* buffer = GetAvailableBuffer();
     if (!buffer)
@@ -488,29 +478,24 @@ void Avcdec::ProcessDecodedPicture(DecodedPicList *pPic)
     // COPY YUV DATA TO DISPLAY BUFFER
     if (pPic->pY)
     {
-        std::cout << "      Copying Y plane..." << std::endl;
         memcpy(buffer->data, pPic->pY, ySize);
     }
     
     if (pPic->pU)
     {
-        std::cout << "      Copying U plane..." << std::endl;
         memcpy(buffer->data + ySize, pPic->pU, uvSize);
     }
     else
     {
-        std::cout << "      WARNING: U plane is NULL, filling with 128" << std::endl;
         memset(buffer->data + ySize, 128, uvSize);
     }
     
     if (pPic->pV)
     {
-        std::cout << "      Copying V plane..." << std::endl;
         memcpy(buffer->data + ySize + uvSize, pPic->pV, uvSize);
     }
     else
     {
-        std::cout << "      WARNING: V plane is NULL, filling with 128" << std::endl;
         memset(buffer->data + ySize + uvSize, 128, uvSize);
     }
     
@@ -525,8 +510,6 @@ void Avcdec::ProcessDecodedPicture(DecodedPicList *pPic)
     
     // QUEUE FRAME FOR APPLICATION
     QueueFrameForDisplay(buffer);
-    
-    std::cout << "END PROCESSING" << std::endl;
 }
 
 bool Avcdec::CheckBufferSpace(UInt32 needed_bytes)
@@ -563,10 +546,6 @@ Avcdec::PictureBuffer* Avcdec::GetAvailableBuffer()
             return &m_pictureBuffers[i];
         }
     }
-    
-    // All buffers locked - warning and reuse first one
-    std::cout << "      WARNING: All buffers locked, reusing buffer 0" << std::endl;
-    std::cout << "      Application may not be calling vdec_release_pic_buffer()" << std::endl;
     
     // Force clear the first buffer
     m_pictureBuffers[0].locked = false;
