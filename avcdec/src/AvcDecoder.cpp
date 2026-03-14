@@ -101,9 +101,7 @@ Avcdec::~Avcdec()
         m_pictureBuffers = nullptr;
     }
     
-    // Clear queue
-    while (!m_frameQueue.empty())
-        m_frameQueue.pop();
+    
 }
 
 void Avcdec::vdec_start(UInt16 PLAY_MODE, UInt16 POST_PROCESS)
@@ -185,28 +183,23 @@ unsigned int Avcdec::vdec_put_bs(
 
 Byte* Avcdec::vdec_get_picture(PICMETAINFO_AVC* PIC_METAINFO)
 {
-    {
-        std::lock_guard<std::mutex> lock(m_frameQueueMutex);
-        
-        if (m_frameQueue.empty())
-        {
-            return NULL;
+    std::lock_guard<std::mutex> lock(m_pictureBuffersMutex);
+    
+    // Find next locked buffer that hasn't been retrieved yet
+    for (int i = 0; i < m_bufferCount; i++) {
+        if (m_pictureBuffers[i].locked) {
+            if (PIC_METAINFO) {
+                PIC_METAINFO->pic_width = m_pictureBuffers[i].width;
+                PIC_METAINFO->pic_height = m_pictureBuffers[i].height;
+                PIC_METAINFO->pic_type = 0;
+                PIC_METAINFO->bit_depth = 8;
+            }
+            
+            return m_pictureBuffers[i].data;  // Direct return, no queue!
         }
-        
-        QueuedFrame frame = m_frameQueue.front();
-        m_frameQueue.pop();
-        
-        if (PIC_METAINFO)
-        {
-            PIC_METAINFO->pic_width = frame.width;
-            PIC_METAINFO->pic_height = frame.height;
-            PIC_METAINFO->pic_type = frame.metadata.pic_type;
-            PIC_METAINFO->bit_depth = frame.metadata.bit_depth;
-        }
-        
-        m_frameCount++;
-        return frame.data;
     }
+    
+    return NULL;  // No frames available
 }
 
 unsigned int Avcdec::vdec_get_status(
@@ -234,20 +227,17 @@ void* Avcdec::vdec_get_DecodedHandle()
 
 void Avcdec::vdec_release_pic_buffer(Byte* PIC_ADDR)
 {
-    if (!PIC_ADDR)
-        return;
+    std::lock_guard<std::mutex> lock(m_pictureBuffersMutex);
     
-    // Mark buffer as available
-    for (int i = 0; i < m_bufferCount; i++)
-    {
-        if (m_pictureBuffers[i].data == PIC_ADDR)
-        {
-            m_pictureBuffers[i].locked = false;
+    for (int i = 0; i < m_bufferCount; i++) {
+        bool ans = m_pictureBuffers[i].data == PIC_ADDR;
+        std::cout << " m_pictureBuffers[i].data  == PIC_ADDR " << ans << std::endl;
+        if (m_pictureBuffers[i].data == PIC_ADDR) {
+            std::cout << " Locked To False " << i << "buffer" << std::endl;
+            m_pictureBuffers[i].locked = false;      // Available for reuse
             return;
         }
     }
-    
-    std::cout << "    WARNING: Buffer address not found" << std::endl;
 }
 
 int Avcdec::vdec_YUV420toRGB24(
@@ -509,7 +499,7 @@ void Avcdec::ProcessDecodedPicture(DecodedPicList *pPic)
     std::cout << "      Buffer address: " << (void*)buffer->data << std::endl;
     
     // QUEUE FRAME FOR APPLICATION
-    QueueFrameForDisplay(buffer);
+    //QueueFrameForDisplay(buffer);
 }
 
 bool Avcdec::CheckBufferSpace(UInt32 needed_bytes)
@@ -540,7 +530,7 @@ Avcdec::PictureBuffer* Avcdec::GetAvailableBuffer()
     // Find first unlocked buffer
     for (int i = 0; i < m_bufferCount; i++)
     {
-        if (!m_pictureBuffers[i].locked)
+        if (!m_pictureBuffers[i].locked) 
         {
             std::cout << "      Using buffer " << i << " (unlocked)" << std::endl;
             return &m_pictureBuffers[i];
@@ -554,23 +544,5 @@ Avcdec::PictureBuffer* Avcdec::GetAvailableBuffer()
 
 void Avcdec::QueueFrameForDisplay(PictureBuffer* buffer)
 {
-    if (!buffer)
-        return;
     
-    QueuedFrame frame;
-    frame.data = buffer->data;
-    frame.width = buffer->width;
-    frame.height = buffer->height;
-    frame.poc = buffer->poc;
-    frame.metadata.pic_width = buffer->width;
-    frame.metadata.pic_height = buffer->height;
-    frame.metadata.pic_type = 0;
-    frame.metadata.bit_depth = 8;
-    
-    {
-        std::lock_guard<std::mutex> lock(m_frameQueueMutex);
-        m_frameQueue.push(frame);
-    }
-    
-    std::cout << " Frame queued! Queue size: " << m_frameQueue.size() << std::endl;
 }

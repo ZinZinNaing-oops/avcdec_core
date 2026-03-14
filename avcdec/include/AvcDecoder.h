@@ -173,16 +173,16 @@ private:
     bool m_postprocess_enabled;
     
     // Output frame storage
-    struct QueuedFrame {
-        Byte* data;
-        int width;
-        int height;
-        int poc;
-        PICMETAINFO_AVC metadata;
-    };
+    // struct QueuedFrame {
+    //     Byte* data;
+    //     int width;
+    //     int height;
+    //     int poc;
+    //     PICMETAINFO_AVC metadata;
+    // };
     
-    std::queue<QueuedFrame> m_frameQueue;
-    std::mutex m_frameQueueMutex;
+    // std::queue<QueuedFrame> m_frameQueue;
+    std::mutex m_pictureBuffersMutex;
     int m_frameCount;
     
     // Initializes the JM H.264 decoder with default parameters
