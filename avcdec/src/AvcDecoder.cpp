@@ -5,27 +5,27 @@
 #include <cstdio>
 #include <mutex>
 
-// JM External Functions and Variables
+// JM 側の外部関数・外部変数
 extern "C" {
     #include "../../JM/ldecod/inc/global.h"
     #include "../../JM/ldecod/inc/annexb.h"
      #include "../../JM/ldecod/inc/image.h" 
     
-    // Memory mode globals
+    // メモリ入力モード用グローバル
     extern unsigned char* g_memory_buffer;
     extern int g_memory_size;
     extern int g_memory_pos;
     extern int g_memory_mode;
     
-    // Memory mode functions
+    // メモリ入力モード用関数
     extern void AnnexBMemoryModeInit(unsigned char *buffer, int size);
     extern void AnnexBMemoryModeReset(void);
     extern void AnnexBMemoryModeExit(void);
     
-    // JM structures
+    // JM 構造体
     extern DecoderParams *p_Dec;
     
-    // JM functions
+    // JM 関数
     extern int OpenDecoder(InputParameters *p_Inp);
     extern int DecodeOneFrame(DecodedPicList **ppDecPicList);
     extern int FinitDecoder(DecodedPicList **ppDecPicList);
@@ -42,31 +42,28 @@ Avcdec::Avcdec(DECPARAM_AVC *INPUT_PARAM)
       m_streamSize(0),
       m_started(false),
       m_postprocess_enabled(false)
-{
-    std::cout << "Avcdec created" << std::endl;
-    
-    // Copy configuration
+{   
+    // 設定をコピー
     m_config = *INPUT_PARAM;
     
-    // Allocate stream buffer
+    // ストリームバッファを確保
     m_streamCapacity = m_config.bs_buf_size;
     m_streamBuffer = new Byte[m_streamCapacity];
     memset(m_streamBuffer, 0, m_streamCapacity);
     m_streamSize = 0;  
 
-    // ALLOCATE PICTURE BUFFERS 
-    std::cout << "Display Picture Buffers" << std::endl;
+    // 表示用ピクチャバッファを確保
     m_bufferCount = m_config.disp_buf_num;
     m_pictureBuffers = new PictureBuffer[m_bufferCount];
     
-    // Calculate size per picture (YUV420)
+    // 1フレーム当たりのサイズを計算（YUV420）
     int pic_width = m_config.disp_max_width;
     int pic_height = m_config.disp_max_height;
     int ySize = pic_width * pic_height;
     int uvSize = ySize / 4;
     int pic_size = ySize + 2 * uvSize;  // YUV420 size
     
-    // Allocate each picture buffer
+    // 各表示バッファを初期化
     for (int i = 0; i < m_bufferCount; i++)
     {
         m_pictureBuffers[i].data = new Byte[pic_size];
@@ -79,14 +76,14 @@ Avcdec::Avcdec(DECPARAM_AVC *INPUT_PARAM)
 
 Avcdec::~Avcdec()
 {  
-    // Free stream buffer
+    // ストリームバッファを解放
     if (m_streamBuffer)
     {
         delete[] m_streamBuffer;
         m_streamBuffer = nullptr;
     }
     
-    // Free picture buffers ONLY if allocated
+    // 表示バッファを解放（確保済み時のみ）
     if (m_pictureBuffers && m_bufferCount > 0)
     {
         for (int i = 0; i < m_bufferCount; i++)
@@ -110,7 +107,7 @@ Avcdec::~Avcdec()
         m_allocatedQueuedFrames.clear();
     }
     
-    // Clear queue
+    // キューを空にする
     while (!m_frameQueue.empty())
         m_frameQueue.pop();
 }
@@ -123,17 +120,16 @@ void Avcdec::vdec_start(UInt16 PLAY_MODE, UInt16 POST_PROCESS)
     m_started = true;
     m_postprocess_enabled = (POST_PROCESS != 0);
     
-    // Setup memory mode globals for JM
+    // JM をメモリ入力モードで初期化
     AnnexBMemoryModeInit(m_streamBuffer, 0);
 
-    // Initialize JM decoder
+    // JM デコーダを初期化
     InitJMDecoder();  
 }
 
 int Avcdec::vdec_stop()
 {
     m_started = false;
-    
     return 0;
 }
 
@@ -149,43 +145,38 @@ unsigned int Avcdec::vdec_put_bs(
     UInt32 PTS,
     UInt16 ERR_FLAG,
     UInt32 ERR_SN_SKIP)
-{
-    std::cout << "vdec_put_bs(" << LENGTH << " bytes)" << std::endl;
-    
-    // Check if decoder started
+{   
+    // デコーダ起動状態を確認
     if (!m_started)
     {
         std::cout << "  ERROR: Decoder not started" << std::endl;
         return (unsigned int)-1;
     }
     
-    // Accumulate data in stream buffer
+    // 入力データをストリームバッファへ蓄積
     if (PAYLOAD && LENGTH > 0)
     {
-        // Check buffer space
+        // バッファ空き容量を確認
         if (!CheckBufferSpace(LENGTH))
         {
             std::cout << "  ERROR: Buffer overflow" << std::endl;
             return (unsigned int)-1;
         }
         
-        // Copy data to buffer
+        // 入力データをコピー
         memcpy(m_streamBuffer + m_streamSize, PAYLOAD, LENGTH);
         m_streamSize += LENGTH;
-        
-        std::cout << "  Total buffer: " << m_streamSize << " bytes" << std::endl;
     }
     
-    // Update JM's buffer view
+    // JM 側が参照するサイズ情報を更新
     g_memory_size = m_streamSize;
     
-    // Handle END_OF_AU marker
+    // AU 終端フラグを処理
     if (END_OF_AU == 1)
     {
-        std::cout << "  END_OF_AU marker received" << std::endl;
         HandleEndOfAU();
         
-        // Decode buffer when END_OF_AU received
+        // AU 終端受信時にデコードを実行
         DecodeBuffer();
     }
     
@@ -225,12 +216,12 @@ unsigned int Avcdec::vdec_get_status(
 {
     UInt16 dec_status = 0;
     
-    // Set status flags
+    // ステータスフラグ設定
     if (m_started)
         dec_status |= (1 << 6);  // Decoding in progress
     
     *DEC_STATUS = dec_status;
-    //*DISP_STATUS = m_frameInfoQueue.empty() ? 0 : 1;
+    *DISP_STATUS = m_frameQueue.empty() ? 0 : 1;
     *ERR_STATUS = 0;
     
     return 0;
@@ -238,7 +229,7 @@ unsigned int Avcdec::vdec_get_status(
 
 void* Avcdec::vdec_get_DecodedHandle()
 {
-    return nullptr;
+    return &m_decodedHandle;
 }
 
 void Avcdec::vdec_release_pic_buffer(Byte* PIC_ADDR)
@@ -246,7 +237,7 @@ void Avcdec::vdec_release_pic_buffer(Byte* PIC_ADDR)
     if (!PIC_ADDR)
         return;
     
-    // Mark buffer as available
+    // 固定表示バッファなら未使用状態へ戻す
     for (int i = 0; i < m_bufferCount; i++)
     {
         if (m_pictureBuffers[i].data == PIC_ADDR)
@@ -284,7 +275,7 @@ int Avcdec::vdec_YUV420toRGB24(
     unsigned char* u_ptr = iYUV + ySize;
     unsigned char* v_ptr = iYUV + ySize + uvSize;
     
-    // Convert each pixel
+    // 各画素を YUV から RGB へ変換
     for (int i = 0; i < ySize; i++)
     {
         int x = i % width;
@@ -295,12 +286,12 @@ int Avcdec::vdec_YUV420toRGB24(
         int U = u_ptr[u_idx];
         int V = v_ptr[u_idx];
         
-        // YUV to RGB conversion formula
+        // YUV -> RGB 変換式
         int R = Y + (1.402f * (V - 128));
         int G = Y - (0.344f * (U - 128)) - (0.714f * (V - 128));
         int B = Y + (1.772f * (U - 128));
         
-        // Clamp to valid range
+        // 画素値を有効範囲に丸める
         R = std::max(0, std::min(255, R));
         G = std::max(0, std::min(255, G));
         B = std::max(0, std::min(255, B));
@@ -361,10 +352,10 @@ int Avcdec::YUV420toRGB24_DX(
 
 void Avcdec::InitJMDecoder()
 {   
-    // Create JM input parameters
+    // JM 初期化パラメータを作成
     InputParameters inputParams = {};
     
-    // Set empty file paths (memory mode)
+    // メモリ入力モードのためファイルパスは空
     strcpy(inputParams.infile, "");
     strcpy(inputParams.outfile, "");
     strcpy(inputParams.reffile, "");
@@ -373,14 +364,12 @@ void Avcdec::InitJMDecoder()
     inputParams.write_uv = 0;
     inputParams.bDisplayDecParams = 0;
     
-    // Open decoder
+    // デコーダをオープン
     if (OpenDecoder(&inputParams) != DEC_OPEN_NOERR)
     {
         std::cout << "  ERROR: OpenDecoder failed" << std::endl;
         return;
     }
-    
-    std::cout << "  JM decoder initialized" << std::endl;
 }
 
 void Avcdec::DecodeBuffer()
@@ -395,12 +384,10 @@ void Avcdec::DecodeBuffer()
     int picture_count = 0;
     g_memory_pos = 0;
     
-    std::cout << "  Starting decode loop..." << std::endl;
-    
     DecodedPicList *pDecPicList = nullptr;
     int ret;
     
-    // Decode loop - mirrors file mode: process pictures after each frame including EOS
+    // デコードループ（EOS まで1フレームずつ処理）
     do
     {
         ret = DecodeOneFrame(&pDecPicList);
@@ -408,7 +395,6 @@ void Avcdec::DecodeBuffer()
         if (ret == DEC_EOS || ret == DEC_SUCCEED)
         {
             frame_count++;
-            std::cout << "\n Numbers of  Frame  Decoded" << frame_count  << std::endl;
             
             if (pDecPicList != nullptr)
             {
@@ -427,7 +413,7 @@ void Avcdec::DecodeBuffer()
                         ProcessDecodedPicture(pPic);
                         picture_count++;
                         
-                        // Mark picture as consumed
+                        // 処理済みとして無効化
                         pPic->bValid = 0;
                     }
                 }
@@ -440,11 +426,10 @@ void Avcdec::DecodeBuffer()
         }
     } while (ret == DEC_SUCCEED);
     
-    // Flush the DPB: FinitDecoder outputs all remaining buffered pictures
-    std::cout << " END OF STREAM - Flushing DPB " << std::endl;
+    // DPB をフラッシュして残フレームを取り出す
     FinitDecoder(&pDecPicList);
     
-    // Process all remaining valid pictures from the flushed DPB
+    // フラッシュ後に残っている有効画像を処理
     if (pDecPicList != nullptr)
     {
         for (DecodedPicList *pPic = pDecPicList; pPic != nullptr; pPic = pPic->pNext)
@@ -453,29 +438,20 @@ void Avcdec::DecodeBuffer()
                 pPic->iWidth > 0 &&
                 pPic->iHeight > 0 &&
                 pPic->pY != nullptr)
-            {
-                std::cout << "    ✓ Flushed Picture VALID and READY" << std::endl;
-                std::cout << "      Width:  " << pPic->iWidth << std::endl;
-                std::cout << "      Height: " << pPic->iHeight << std::endl;
-                std::cout << "      POC:    " << pPic->iPOC << std::endl;
-                
+            {   
                 ProcessDecodedPicture(pPic);
-                picture_count++;
-                
+                picture_count++;              
                 pPic->bValid = 0;
             }
         }
     }
-  
-    std::cout << "  Total frames decoded: " << frame_count << std::endl;
-    std::cout << "  Total pictures retrieved: " << picture_count << std::endl;
 }
 
 void Avcdec::ProcessDecodedPicture(DecodedPicList *pPic)
 {
     if (!pPic || !pPic->pY)
     {
-        std::cout << "      ERROR: Invalid picture pointer" << std::endl;
+        std::cout << "ERROR: Invalid picture pointer" << std::endl;
         return;
     }
     
@@ -485,17 +461,15 @@ void Avcdec::ProcessDecodedPicture(DecodedPicList *pPic)
     int uvSize = ySize / 4;
     int totalSize = ySize + 2 * uvSize;
     
-    // GET AVAILABLE DISPLAY BUFFER 
+    // 利用可能な表示バッファを取得
     PictureBuffer* buffer = GetAvailableBuffer();
     if (!buffer)
     {
-        std::cout << "      ERROR: No available display buffer" << std::endl;
+        std::cout << "ERROR: No available display buffer" << std::endl;
         return;
     }
     
-    std::cout << "      Using display buffer" << std::endl;
-    
-    // COPY YUV DATA TO DISPLAY BUFFER
+    // YUV データを表示バッファへコピー
     if (pPic->pY)
     {
         memcpy(buffer->data, pPic->pY, ySize);
@@ -519,16 +493,13 @@ void Avcdec::ProcessDecodedPicture(DecodedPicList *pPic)
         memset(buffer->data + ySize + uvSize, 128, uvSize);
     }
     
-    // UPDATE BUFFER METADATA 
+    // バッファのメタ情報を更新
     buffer->width = width;
     buffer->height = height;
     buffer->poc = pPic->iPOC;
     buffer->locked = true;
     
-    std::cout << "      ✓ Picture data copied to display buffer successfully" << std::endl;
-    std::cout << "      Buffer address: " << (void*)buffer->data << std::endl;
-    
-    // QUEUE FRAME FOR APPLICATION
+    // アプリ側取り出し用キューへ追加
     QueueFrameForDisplay(buffer);
     buffer->locked = false;
 }
@@ -540,7 +511,7 @@ bool Avcdec::CheckBufferSpace(UInt32 needed_bytes)
 
 void Avcdec::HandleEndOfAU()
 {
-    // Add dummy start code to signal access unit end
+    // AU 終端通知用のダミースタートコードを追加
     if (CheckBufferSpace(3))
     {
         m_streamBuffer[m_streamSize++] = 0x00;
@@ -554,21 +525,19 @@ Avcdec::PictureBuffer* Avcdec::GetAvailableBuffer()
 {
     if (!m_pictureBuffers || m_bufferCount == 0)
     {
-        std::cout << "      ERROR: Picture buffers not allocated" << std::endl;
+        std::cout << "ERROR: Picture buffers not allocated" << std::endl;
         return NULL;
     }
     
-    // Find first unlocked buffer
+    // 最初に見つかった未ロックバッファを返す
     for (int i = 0; i < m_bufferCount; i++)
     {
         if (!m_pictureBuffers[i].locked)
         {
-            std::cout << "      Using buffer " << i << " (unlocked)" << std::endl;
             return &m_pictureBuffers[i];
         }
     }
-    
-    std::cout << "      ERROR: No unlocked display buffer available" << std::endl;
+
     return NULL;
 }
 
@@ -603,6 +572,10 @@ void Avcdec::QueueFrameForDisplay(PictureBuffer* buffer)
         std::lock_guard<std::mutex> lock(m_frameQueueMutex);
         m_frameQueue.push(frame);
     }
-    
-    std::cout << " Frame queued! Queue size: " << m_frameQueue.size() << std::endl;
+
+    {
+        std::lock_guard<std::mutex> lock(m_decodedHandle.mutex);
+        m_decodedHandle.signaled = true;
+    }
+    m_decodedHandle.cv.notify_all();
 }

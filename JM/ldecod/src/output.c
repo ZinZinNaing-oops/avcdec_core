@@ -463,11 +463,7 @@ static void allocate_p_dec_pic(VideoParameters *p_Vid, DecodedPicList *pDecPic, 
 */
 static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_out)
 {
-  //zzn
-  printf(">>> FINAL OUTPUT: frame_num=%d  POC=%d\n",
-       p->frame_num,
-       p->frame_poc);
-
+  // メモリモード用にJMオリジナルを変更する
   InputParameters *p_Inp = p_Vid->p_Inp;
   DecodedPicList *pDecPic;
 
@@ -496,7 +492,7 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
   }
 #endif
 
-  // ========== STEP 1: CALCULATE CROP DIMENSIONS ==========
+  //  CALCULATE CROP DIMENSIONS 
   if (p->frame_cropping_flag)
   {
     crop_left   = SubWidthC [p->chroma_format_idc] * p->frame_crop_left_offset;
@@ -521,7 +517,7 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
          p->size_x, p->size_y, iLumaSizeX, iLumaSizeY,
          iChromaSizeX, iChromaSizeY);
 
-  // ========== STEP 2: GET AND ALLOCATE pDecPic BUFFER ==========
+  // GET AND ALLOCATE pDecPic BUFFER 
   pDecPic = get_one_avail_dec_pic_from_list(p_Vid->pDecOuputPic, 0, 0);
   
   if( (pDecPic->pY == NULL) || (pDecPic->iBufSize < iFrameSize) )
@@ -547,7 +543,7 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
   printf("  pDecPic allocated: Y=%p U=%p V=%p Size=%d bytes\n",
          pDecPic->pY, pDecPic->pU, pDecPic->pV, pDecPic->iBufSize);
 
-  // ========== STEP 3: COPY YUV DATA FROM StorablePicture TO pDecPic ==========
+  // COPY YUV DATA FROM StorablePicture TO pDecPic 
   printf("  Copying YUV data to pDecPic: %dx%d -> Y=%p U=%p V=%p\n",
          iLumaSizeX, iLumaSizeY, pDecPic->pY, pDecPic->pU, pDecPic->pV);
 
@@ -570,14 +566,14 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
   printf("  pDecPic ready: iWidth=%d iHeight=%d iPOC=%d bValid=%d\n",
          pDecPic->iWidth, pDecPic->iHeight, pDecPic->iPOC, pDecPic->bValid);
 
-  // ========== STEP 4: RETURN IF MEMORY MODE (no file output) ==========
+  // RETURN IF MEMORY MODE (no file output) 
   if (p_out == -1)
   {
     printf("  Memory mode: returning without file output\n");
     return;
   }
   
-  // file mode
+  // file mode (original)
   if(rgb_output)
   {
     buf = malloc (p->size_x * p->size_y * symbol_size_in_bytes);

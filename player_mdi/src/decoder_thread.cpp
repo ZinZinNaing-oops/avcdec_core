@@ -4,6 +4,7 @@
 #include <fstream>
 #include <vector>
 #include <cstring>
+#include <chrono>
 
 DecoderThread::DecoderThread(QObject *parent)
     : QObject(parent), shouldStop(false)
@@ -49,6 +50,7 @@ void DecoderThread::startDecoding()
 
         decoder = std::make_unique<Avcdec>(&param);
         decoder->vdec_start(0, 0);
+        auto* decodedHandle = static_cast<Avcdec::DecodedHandle*>(decoder->vdec_get_DecodedHandle());
 
         std::ifstream file(inputFile.toStdString(), std::ios::binary);
         if (!file.is_open()) {
@@ -94,28 +96,46 @@ void DecoderThread::startDecoding()
         qDebug() << "DecoderThread: Retrieving decoded frames";
 
         while (!shouldStop) {
-            PICMETAINFO_AVC picInfo = {};
-            unsigned char* yuv = decoder->vdec_get_picture(&picInfo);
+            if (decodedHandle) {
+                std::unique_lock<std::mutex> lock(decodedHandle->mutex);
+                decodedHandle->cv.wait_for(
+                    lock,
+                    std::chrono::milliseconds(100),
+                    [&]() { return decodedHandle->signaled || shouldStop; }
+                );
+                decodedHandle->signaled = false;
+            }
 
-            if (!yuv) break;
+            bool gotAnyFrame = false;
+            while (!shouldStop) {
+                PICMETAINFO_AVC picInfo = {};
+                unsigned char* yuv = decoder->vdec_get_picture(&picInfo);
 
-            picCount++;
+                if (!yuv) break;
 
-            // Convert to independent pixmap
-            QPixmap pixmap = yuv420ToQPixmap(yuv, picInfo.pic_width, picInfo.pic_height);
+                gotAnyFrame = true;
+                picCount++;
 
-            // Ensure deep copy
-            pixmap = pixmap.copy();
+                // Convert to independent pixmap
+                QPixmap pixmap = yuv420ToQPixmap(yuv, picInfo.pic_width, picInfo.pic_height);
 
-            // EMIT BEFORE RELEASE
-            emit frameDecoded(pixmap, picCount, picCount);
+                // Ensure deep copy
+                pixmap = pixmap.copy();
 
-            // RELEASE IMMEDIATELY AFTER CONVERSION
-            decoder->vdec_release_pic_buffer(yuv);
+                // EMIT BEFORE RELEASE
+                emit frameDecoded(pixmap, picCount, picCount);
 
-            qDebug() << "Frame" << picCount << "- converted and released";
+                // RELEASE IMMEDIATELY AFTER CONVERSION
+                decoder->vdec_release_pic_buffer(yuv);
 
-            QCoreApplication::processEvents();
+                qDebug() << "Frame" << picCount << "- converted and released";
+
+                QCoreApplication::processEvents();
+            }
+
+            if (!gotAnyFrame) {
+                break;
+            }
         }
 
         qDebug() << "DecoderThread: Total frames decoded:" << picCount;

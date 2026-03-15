@@ -2,7 +2,6 @@
 set(PLAYER_MDI_SOURCES
     src/main.cpp
     src/mainwindow.cpp
-    src/imageviewer.cpp
     src/videoplayer.cpp 
     src/decoder_thread.cpp
 )
@@ -10,7 +9,6 @@ set(PLAYER_MDI_SOURCES
 # Header files (for MOC)
 set(PLAYER_MDI_HEADERS
     include/mainwindow.h
-    include/imageviewer.h
     include/videoplayer.h 
     include/decoder_thread.h
 )

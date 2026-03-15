@@ -18,8 +18,8 @@
 
 static const int IOBUFFERSIZE = 512*1024; //65536;
 
-//zzn
-// Global variables for memory-based input
+// メモリモード用にJMオリジナルを変更する
+// グローバル変数に対するメモリベースの入力
 unsigned char* g_memory_buffer = NULL;  //What JM reads from , Points to m_streamBuffer
 int g_memory_size = 0;  //How much JM can read , Same as m_streamSize
 int g_memory_pos = 0;  //Where JM is reading
@@ -66,7 +66,7 @@ void free_annex_b(ANNEXB_t **p_annex_b)
 */
 static inline int getChunk(ANNEXB_t *annex_b)
 {
-  // zzn
+  // メモリモード用にJMオリジナルを変更する
   if (g_memory_buffer != NULL)
     {
         if (g_memory_pos >= g_memory_size)
@@ -93,7 +93,7 @@ static inline int getChunk(ANNEXB_t *annex_b)
         return to_copy;
     }
 
-    // file mode (leave untouched)
+    // file mode (original)
     unsigned int readbytes =
         read(annex_b->BitStreamFile,
              annex_b->iobuffer,
@@ -119,8 +119,7 @@ static inline int getChunk(ANNEXB_t *annex_b)
 */
 static inline byte getfbyte(ANNEXB_t *annex_b)
 {
-  //zzn
-  // ========== MEMORY MODE ==========
+  //メモリモード用にJMオリジナルを変更する
   if (g_memory_mode)
   {
     if (g_memory_pos >= g_memory_size)
@@ -135,7 +134,7 @@ static inline byte getfbyte(ANNEXB_t *annex_b)
     return byte_val;
   }
 
-  // ========== FILE MODE (original) ==========
+  // FILE MODE (original) 
   if (0 == annex_b->bytesinbuffer)
   {
     if (0 == getChunk(annex_b))
@@ -145,7 +144,7 @@ static inline byte getfbyte(ANNEXB_t *annex_b)
   return (*annex_b->iobufferread++);
 }
 
-//zzn
+// メモリモード用にJMオリジナルを変更する
 void AnnexBMemoryModeInit(unsigned char *buffer, int size)
 {
     g_memory_buffer = buffer;
@@ -154,11 +153,13 @@ void AnnexBMemoryModeInit(unsigned char *buffer, int size)
     g_memory_mode = 1;
 }
 
+// メモリモード用にJMオリジナルを変更する
 void AnnexBMemoryModeReset(void)
 {
     g_memory_pos = 0;
 }
 
+// メモリモード用にJMオリジナルを変更する
 void AnnexBMemoryModeExit(void)
 {
     g_memory_mode = 0;
@@ -383,7 +384,7 @@ int get_annex_b_NALU (VideoParameters *p_Vid, NALU_t *nalu, ANNEXB_t *annex_b)
  */
 void open_annex_b (char *fn, ANNEXB_t *annex_b)
 {
-  // zzn
+  // メモリモード用にJMオリジナルを変更する
   //  MEMORY MODE CHECK
   if (g_memory_buffer != NULL)
   {
@@ -401,6 +402,8 @@ void open_annex_b (char *fn, ANNEXB_t *annex_b)
 
     return;
   }
+
+  // file mode (original)
   if (NULL != annex_b->iobuffer)
   {
     error ("open_annex_b: tried to open Annex B file twice",500);
@@ -445,6 +448,6 @@ void reset_annex_b(ANNEXB_t *annex_b)
   annex_b->is_eof = FALSE;
   annex_b->bytesinbuffer = 0;
   annex_b->iobufferread = annex_b->iobuffer;
-  //zzn
+  // メモリモード用にJMオリジナルを変更する
   g_memory_pos = 0;
 }

@@ -7,12 +7,10 @@ int main(int argc, char *argv[])
 
     // Set application information
     QApplication::setApplicationName("H.264 Video Player MDI");
-    QApplication::setApplicationVersion("1.0.0");
-    QApplication::setOrganizationName("AvcPlayer");
 
     // Create and show main window
     MainWindow window;
-    window.setWindowTitle("H.264 Video Player - MDI");
+    window.setWindowTitle("H.264 Video Player");
     window.resize(1280, 720);
     window.show();
 
