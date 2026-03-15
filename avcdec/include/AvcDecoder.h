@@ -5,6 +5,7 @@
 #include <iostream>
 #include <cstring>
 #include <mutex>
+#include <unordered_set>
 
 // Forward Declarations from JM
 extern "C" {
@@ -183,6 +184,8 @@ private:
     
     std::queue<QueuedFrame> m_frameQueue;
     std::mutex m_frameQueueMutex;
+    std::mutex m_allocatedFrameMutex;
+    std::unordered_set<Byte*> m_allocatedQueuedFrames;
     int m_frameCount;
     
     // Initializes the JM H.264 decoder with default parameters

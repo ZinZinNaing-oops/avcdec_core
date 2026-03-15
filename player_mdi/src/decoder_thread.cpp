@@ -101,16 +101,16 @@ void DecoderThread::startDecoding()
 
             picCount++;
 
-            // ✅ CRITICAL: Convert to independent pixmap
+            // Convert to independent pixmap
             QPixmap pixmap = yuv420ToQPixmap(yuv, picInfo.pic_width, picInfo.pic_height);
 
-            // ✅ Ensure deep copy
+            // Ensure deep copy
             pixmap = pixmap.copy();
 
-            // ✅ EMIT BEFORE RELEASE
+            // EMIT BEFORE RELEASE
             emit frameDecoded(pixmap, picCount, picCount);
 
-            // ✅ RELEASE IMMEDIATELY AFTER CONVERSION
+            // RELEASE IMMEDIATELY AFTER CONVERSION
             decoder->vdec_release_pic_buffer(yuv);
 
             qDebug() << "Frame" << picCount << "- converted and released";
@@ -137,7 +137,7 @@ QPixmap DecoderThread::yuv420ToQPixmap(const unsigned char *yuvData, int width, 
     }
 
     try {
-        // ✅ OWN MEMORY for RGB (not decoder's)
+        // OWN MEMORY for RGB (not decoder's)
         std::vector<unsigned char> rgbData(width * height * 3);
 
         int ret = decoder->vdec_YUV420toRGB24(
@@ -153,17 +153,17 @@ QPixmap DecoderThread::yuv420ToQPixmap(const unsigned char *yuvData, int width, 
             return QPixmap();
         }
 
-        // ✅ Create image from OUR buffer
+        // Create image from OUR buffer
         QImage image(rgbData.data(), width, height, width * 3, QImage::Format_RGB888);
 
         if (image.isNull()) {
             return QPixmap();
         }
 
-        // ✅ COPY to ensure independence
+        // COPY to ensure independence
         QImage imageCopy = image.copy();
 
-        // ✅ Create QPixmap (owns its data now)
+        // Create QPixmap (owns its data now)
         QPixmap pixmap = QPixmap::fromImage(imageCopy);
 
         return pixmap;

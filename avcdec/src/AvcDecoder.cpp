@@ -100,6 +100,15 @@ Avcdec::~Avcdec()
         delete[] m_pictureBuffers;
         m_pictureBuffers = nullptr;
     }
+
+    {
+        std::lock_guard<std::mutex> lock(m_allocatedFrameMutex);
+        for (Byte* frameData : m_allocatedQueuedFrames)
+        {
+            delete[] frameData;
+        }
+        m_allocatedQueuedFrames.clear();
+    }
     
     // Clear queue
     while (!m_frameQueue.empty())
@@ -243,6 +252,17 @@ void Avcdec::vdec_release_pic_buffer(Byte* PIC_ADDR)
         if (m_pictureBuffers[i].data == PIC_ADDR)
         {
             m_pictureBuffers[i].locked = false;
+            return;
+        }
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(m_allocatedFrameMutex);
+        auto it = m_allocatedQueuedFrames.find(PIC_ADDR);
+        if (it != m_allocatedQueuedFrames.end())
+        {
+            delete[] PIC_ADDR;
+            m_allocatedQueuedFrames.erase(it);
             return;
         }
     }
@@ -510,6 +530,7 @@ void Avcdec::ProcessDecodedPicture(DecodedPicList *pPic)
     
     // QUEUE FRAME FOR APPLICATION
     QueueFrameForDisplay(buffer);
+    buffer->locked = false;
 }
 
 bool Avcdec::CheckBufferSpace(UInt32 needed_bytes)
@@ -547,18 +568,29 @@ Avcdec::PictureBuffer* Avcdec::GetAvailableBuffer()
         }
     }
     
-    // Force clear the first buffer
-    m_pictureBuffers[0].locked = false;
-    return &m_pictureBuffers[0];
+    std::cout << "      ERROR: No unlocked display buffer available" << std::endl;
+    return NULL;
 }
 
 void Avcdec::QueueFrameForDisplay(PictureBuffer* buffer)
 {
     if (!buffer)
         return;
+
+    int ySize = buffer->width * buffer->height;
+    int uvSize = ySize / 4;
+    int totalSize = ySize + (2 * uvSize);
+
+    Byte* queuedData = new Byte[totalSize];
+    memcpy(queuedData, buffer->data, totalSize);
+
+    {
+        std::lock_guard<std::mutex> lock(m_allocatedFrameMutex);
+        m_allocatedQueuedFrames.insert(queuedData);
+    }
     
     QueuedFrame frame;
-    frame.data = buffer->data;
+    frame.data = queuedData;
     frame.width = buffer->width;
     frame.height = buffer->height;
     frame.poc = buffer->poc;

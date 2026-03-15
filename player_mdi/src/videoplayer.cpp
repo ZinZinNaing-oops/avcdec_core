@@ -19,7 +19,9 @@ VideoPlayer::VideoPlayer(QWidget *parent)
       playbackState(0),
       currentFrameIndex(0),
       totalFrames(0),
-      frameRate(29.97)
+    frameRate(29.97),
+    firstFrameWidth(0),
+    firstFrameHeight(0)
 {
     setWindowTitle(tr("Video Player"));
     setupUI();
@@ -61,7 +63,7 @@ void VideoPlayer::setupUI()
     scrollArea = new QScrollArea;
     scrollArea->setBackgroundRole(QPalette::Dark);
     scrollArea->setAlignment(Qt::AlignCenter);
-    scrollArea->setWidgetResizable(true);
+    scrollArea->setWidgetResizable(false);
 
     videoLabel = new QLabel;
     videoLabel->setAlignment(Qt::AlignCenter);
@@ -134,6 +136,8 @@ bool VideoPlayer::openFile(const QString &fileName)
     frameBuffer.clear();
     currentFrameIndex = 0;
     totalFrames = 0;
+    firstFrameWidth = 0;
+    firstFrameHeight = 0;
 
     decoderThread->setInputFile(fileName);
 
@@ -249,6 +253,11 @@ void VideoPlayer::onFrameDecoded(const QPixmap &pixmap, int frameNumber, int tot
     
     this->totalFrames = totalFrames;
     frameSlider->setMaximum(qMax(0, this->totalFrames - 1));
+
+    if (frameIndex == 0) {
+        firstFrameWidth = pixmap.width();
+        firstFrameHeight = pixmap.height();
+    }
     
     if (frameIndex == 0) {
         displayFrame(0);
@@ -276,7 +285,6 @@ void VideoPlayer::onDecodingError(const QString &error)
 void VideoPlayer::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
-    scaleImage();
 }
 
 void VideoPlayer::displayFrame(int frameIndex)
@@ -306,11 +314,25 @@ void VideoPlayer::displayFrame(int frameIndex)
         std::cout << "  ✓ Frame FOUND in buffer" << std::endl;
         std::cout << "  Pixmap size: " << currentPixmap.width() << "x" << currentPixmap.height() << std::endl;
         std::cout << "  Pixmap null: " << (currentPixmap.isNull() ? "YES" : "NO") << std::endl;
-        
+
+        // Keep display dimensions identical to decoded frame dimensions.
+        videoLabel->setFixedSize(currentPixmap.size());
         videoLabel->setPixmap(currentPixmap);
-        scaleImage();
-        
-        std::cout << "  → Called videoLabel->setPixmap() and scaleImage()" << std::endl;
+
+        std::cout << "  Display size (label): " << videoLabel->width() << "x" << videoLabel->height() << std::endl;
+        std::cout << "  Display trace: frame=" << frameIndex
+                  << " original=" << currentPixmap.width() << "x" << currentPixmap.height()
+                  << " displayed=" << videoLabel->width() << "x" << videoLabel->height()
+                  << ((videoLabel->size() == currentPixmap.size()) ? " [MATCH]" : " [MISMATCH]")
+                  << std::endl;
+
+        infoLabel->setText(tr("Frame %1 / %2 | Original: %3x%4 | Displayed: %5x%6")
+                           .arg(frameIndex + 1)
+                           .arg(totalFrames)
+                           .arg(currentPixmap.width())
+                           .arg(currentPixmap.height())
+                           .arg(videoLabel->width())
+                           .arg(videoLabel->height()));
     } else {
         std::cout << "  ERROR: Frame NOT in buffer!" << std::endl;
     }
@@ -318,18 +340,13 @@ void VideoPlayer::displayFrame(int frameIndex)
 
 void VideoPlayer::scaleImage()
 {
-    if (currentPixmap.isNull()) return;
+    if (currentPixmap.isNull()) {
+        return;
+    }
 
-    QSize availableSize = scrollArea->viewport()->size();
-    if (availableSize.isEmpty()) return;
-
-    QPixmap scaledPixmap = currentPixmap.scaled(
-        availableSize.width(),
-        availableSize.height(),
-        Qt::KeepAspectRatio,
-        Qt::SmoothTransformation);
-    
-    videoLabel->setPixmap(scaledPixmap);
+    // Preserve original decoded dimensions; do not scale to viewport.
+    videoLabel->setFixedSize(currentPixmap.size());
+    videoLabel->setPixmap(currentPixmap);
 }
 
 void VideoPlayer::updateTimeLabel()
