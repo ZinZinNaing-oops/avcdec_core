@@ -1763,11 +1763,6 @@ static void adaptive_memory_management(DecodedPictureBuffer *p_Dpb, StorablePict
  */
 void store_picture_in_dpb(DecodedPictureBuffer *p_Dpb, StorablePicture* p)
 {
-  printf("DPB STORE: frame_num=%d  POC=%d  is_ref=%d\n",
-       p->frame_num,
-       p->frame_poc,
-       p->used_for_reference);
-
   VideoParameters *p_Vid = p_Dpb->p_Vid;
   unsigned i;
   int poc, pos;

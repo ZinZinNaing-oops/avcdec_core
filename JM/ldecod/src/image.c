@@ -1881,10 +1881,6 @@ void pad_dec_picture(VideoParameters *p_Vid, StorablePicture *dec_picture)
  */
 void exit_picture(VideoParameters *p_Vid, StorablePicture **dec_picture)
 {
-  printf(">>> EXIT_PICTURE: frame_num=%d  POC=%d\n",
-       (*dec_picture)->frame_num,
-       (*dec_picture)->frame_poc);
-
   InputParameters *p_Inp = p_Vid->p_Inp;
   SNRParameters   *snr   = p_Vid->snr;
   char yuv_types[4][6]= {"4:0:0","4:2:0","4:2:2","4:4:4"};

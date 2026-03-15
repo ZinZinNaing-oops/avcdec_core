@@ -404,12 +404,7 @@ void Avcdec::DecodeBuffer()
                         pPic->iWidth > 0 &&
                         pPic->iHeight > 0 &&
                         pPic->pY != nullptr)
-                    {
-                        std::cout << "    ✓ Picture is VALID and READY" << std::endl;
-                        std::cout << "      Width:  " << pPic->iWidth << std::endl;
-                        std::cout << "      Height: " << pPic->iHeight << std::endl;
-                        std::cout << "      POC:    " << pPic->iPOC << std::endl;
-                        
+                    {           
                         ProcessDecodedPicture(pPic);
                         picture_count++;
                         

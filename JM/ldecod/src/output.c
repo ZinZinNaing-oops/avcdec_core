@@ -513,10 +513,6 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
   iLumaSize  = iLumaSizeX * iLumaSizeY * symbol_size_in_bytes;
   iFrameSize = (iLumaSizeX * iLumaSizeY + 2 * (iChromaSizeX * iChromaSizeY)) * symbol_size_in_bytes;
 
-  printf("  Image: %dx%d (cropped: %dx%d), Chroma: %dx%d\n",
-         p->size_x, p->size_y, iLumaSizeX, iLumaSizeY,
-         iChromaSizeX, iChromaSizeY);
-
   // GET AND ALLOCATE pDecPic BUFFER 
   pDecPic = get_one_avail_dec_pic_from_list(p_Vid->pDecOuputPic, 0, 0);
   
@@ -540,13 +536,6 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
     no_mem_exit("write_out_picture: buf");
   }
 
-  printf("  pDecPic allocated: Y=%p U=%p V=%p Size=%d bytes\n",
-         pDecPic->pY, pDecPic->pU, pDecPic->pV, pDecPic->iBufSize);
-
-  // COPY YUV DATA FROM StorablePicture TO pDecPic 
-  printf("  Copying YUV data to pDecPic: %dx%d -> Y=%p U=%p V=%p\n",
-         iLumaSizeX, iLumaSizeY, pDecPic->pY, pDecPic->pU, pDecPic->pV);
-
   // Copy Y plane
   buf = pDecPic->pY;
   p_Vid->img2buf(p->imgY, buf, p->size_x, p->size_y, symbol_size_in_bytes, 
@@ -562,14 +551,9 @@ static void write_out_picture(VideoParameters *p_Vid, StorablePicture *p, int p_
   p_Vid->img2buf(p->imgUV[1], buf, p->size_x_cr, p->size_y_cr, symbol_size_in_bytes, 
                  crop_left, crop_right, crop_top, crop_bottom, pDecPic->iUVBufStride);
 
-  printf("  YUV data copied successfully\n");
-  printf("  pDecPic ready: iWidth=%d iHeight=%d iPOC=%d bValid=%d\n",
-         pDecPic->iWidth, pDecPic->iHeight, pDecPic->iPOC, pDecPic->bValid);
-
   // RETURN IF MEMORY MODE (no file output) 
   if (p_out == -1)
   {
-    printf("  Memory mode: returning without file output\n");
     return;
   }
   
@@ -856,10 +840,6 @@ void flush_direct_output(VideoParameters *p_Vid, int p_out)
  */
 void write_stored_frame( VideoParameters *p_Vid, FrameStore *fs, int p_out)
 {
-  printf(">>> DPB OUTPUT: frame_num=%d  POC=%d\n",
-       fs->frame->frame_num,
-       fs->frame->frame_poc);
-
   // make sure no direct output field is pending
   flush_direct_output(p_Vid, p_out);
 

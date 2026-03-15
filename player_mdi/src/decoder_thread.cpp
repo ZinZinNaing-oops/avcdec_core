@@ -128,8 +128,6 @@ void DecoderThread::startDecoding()
                 // RELEASE IMMEDIATELY AFTER CONVERSION
                 decoder->vdec_release_pic_buffer(yuv);
 
-                qDebug() << "Frame" << picCount << "- converted and released";
-
                 QCoreApplication::processEvents();
             }
 

@@ -1248,8 +1248,6 @@ Return:
 ************************************/
 int DecodeOneFrame(DecodedPicList **ppDecPicList)
 {
-  printf("\n===== DecodeOneFrame START =====\n");
-
   int iRet;
   DecoderParams *pDecoder = p_Dec;
   ClearDecPicList(pDecoder->p_Vid);
@@ -1268,7 +1266,6 @@ int DecodeOneFrame(DecodedPicList **ppDecPicList)
   }
 
   *ppDecPicList = pDecoder->p_Vid->pDecOuputPic;
-  printf("===== Frame Decoded =====\n");
   return iRet;
 }
 

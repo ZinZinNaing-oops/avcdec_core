@@ -142,7 +142,6 @@ bool VideoPlayer::openFile(const QString &fileName)
     decoderThread->setInputFile(fileName);
 
     if (!workerThread->isRunning()) {
-        std::cout << "[VideoPlayer] Starting worker thread" << std::endl;
         workerThread->start();
     } else {
         std::cout << "[VideoPlayer] Worker thread already running" << std::endl;
@@ -238,18 +237,9 @@ void VideoPlayer::onFrameDecoded(const QPixmap &pixmap, int frameNumber, int tot
 {
     int frameIndex = frameNumber - 1;
     
-    std::cout << "[VideoPlayer::onFrameDecoded]" << std::endl;
-    std::cout << "  Frame number: " << frameNumber << std::endl;
-    std::cout << "  Frame index: " << frameIndex << std::endl;
-    std::cout << "  Pixmap size: " << pixmap.width() << "x" << pixmap.height() << std::endl;
-    std::cout << "  Pixmap null: " << (pixmap.isNull() ? "YES" : "NO") << std::endl;
-    
-    // ✅ DEEP COPY the pixmap
+    // DEEP COPY the pixmap
     QPixmap pixmapCopy = pixmap.copy();
     frameBuffer[frameIndex] = pixmapCopy;
-    
-    std::cout << "  Stored in frameBuffer[" << frameIndex << "]" << std::endl;
-    std::cout << "  Buffer now contains " << frameBuffer.size() << " frames" << std::endl;
     
     this->totalFrames = totalFrames;
     frameSlider->setMaximum(qMax(0, this->totalFrames - 1));
@@ -265,11 +255,7 @@ void VideoPlayer::onFrameDecoded(const QPixmap &pixmap, int frameNumber, int tot
 }
 
 void VideoPlayer::onDecodingFinished()
-{
-    std::cout << "\n[VideoPlayer::onDecodingFinished]" << std::endl;
-    std::cout << "  Total frames in buffer: " << frameBuffer.size() << std::endl;
-    std::cout << "  Total frames variable: " << totalFrames << std::endl;
-    
+{ 
     playButton->setEnabled(true);
     frameSlider->setEnabled(true);
 }
@@ -288,12 +274,7 @@ void VideoPlayer::resizeEvent(QResizeEvent *event)
 }
 
 void VideoPlayer::displayFrame(int frameIndex)
-{
-    std::cout << "\n[VideoPlayer::displayFrame]" << std::endl;
-    std::cout << "  Requested frame index: " << frameIndex << std::endl;
-    std::cout << "  Total frames (totalFrames): " << totalFrames << std::endl;
-    std::cout << "  Buffer size: " << frameBuffer.size() << std::endl;
-    
+{ 
     if (frameIndex < 0 || frameIndex >= totalFrames) {
         std::cout << "  ERROR: frameIndex out of range!" << std::endl;
         return;
@@ -302,29 +283,14 @@ void VideoPlayer::displayFrame(int frameIndex)
     if (frameBuffer.find(frameIndex) != frameBuffer.end()) {
         currentPixmap = frameBuffer[frameIndex];
         
-        // ✅ DEBUG: Check if pixmap actually changed
+        // Check if pixmap actually changed
         static QPixmap lastPixmap;
-        if (currentPixmap.toImage().bits() == lastPixmap.toImage().bits()) {
-            std::cout << "  ⚠️ WARNING: Same pixmap data as last frame!" << std::endl;
-        } else {
-            std::cout << "  ✓ Different pixmap data!" << std::endl;
-        }
+
         lastPixmap = currentPixmap;
-        
-        std::cout << "  ✓ Frame FOUND in buffer" << std::endl;
-        std::cout << "  Pixmap size: " << currentPixmap.width() << "x" << currentPixmap.height() << std::endl;
-        std::cout << "  Pixmap null: " << (currentPixmap.isNull() ? "YES" : "NO") << std::endl;
 
         // Keep display dimensions identical to decoded frame dimensions.
         videoLabel->setFixedSize(currentPixmap.size());
         videoLabel->setPixmap(currentPixmap);
-
-        std::cout << "  Display size (label): " << videoLabel->width() << "x" << videoLabel->height() << std::endl;
-        std::cout << "  Display trace: frame=" << frameIndex
-                  << " original=" << currentPixmap.width() << "x" << currentPixmap.height()
-                  << " displayed=" << videoLabel->width() << "x" << videoLabel->height()
-                  << ((videoLabel->size() == currentPixmap.size()) ? " [MATCH]" : " [MISMATCH]")
-                  << std::endl;
 
         infoLabel->setText(tr("Frame %1 / %2 | Original: %3x%4 | Displayed: %5x%6")
                            .arg(frameIndex + 1)
